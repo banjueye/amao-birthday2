@@ -195,16 +195,24 @@
         // Animorphs Transition
         if (isMorphing) {
             morphCounter++;
-            let alpha = Math.min(morphCounter / 20.0, 1.0);
             
-            if(morphCounter <= 20) {
+            // NEW TIMING: 60 frames = 1 second fade, 240 frames = 3 seconds hold time
+            let fadeSpeed = 60.0;
+            let totalShowTime = 240; 
+            
+            let alpha = Math.min(morphCounter / fadeSpeed, 1.0);
+            
+            if(morphCounter <= fadeSpeed) {
+                // Phase 1: Smoothly dissolve from his face into the meme
                 ctx.putImageData(frozenFrameData, 0, 0);
                 ctx.globalAlpha = alpha;
                 ctx.drawImage(targetMeme, 0, 0, W, H);
                 ctx.globalAlpha = 1.0;
-            } else if (morphCounter <= 70) {
+            } else if (morphCounter <= totalShowTime) {
+                // Phase 2: Hold the meme on screen so he can laugh
                 ctx.drawImage(targetMeme, 0, 0, W, H);
             } else {
+                // Phase 3: Done, move to the next stage
                 isMorphing = false; morphCounter = 0; holdFrames = 0;
             }
             requestAnimationFrame(renderLoop);
@@ -301,4 +309,5 @@
     renderLoop();
 </script>
 </body>
+
 </html>
