@@ -44,7 +44,7 @@
     let appState = "SPLASH"; 
     let currentStage = 1;
     let holdFrames = 0;
-    const REQUIRED_HOLD = 20;
+    const REQUIRED_HOLD = 15; 
     
     let isMorphing = false;
     let morphCounter = 0;
@@ -65,30 +65,31 @@
         });
     }
 
-    // AI Setup
+    // AI Setup 
     const handsModel = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-    handsModel.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+    handsModel.setOptions({ maxNumHands: 2, modelComplexity: 0, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     handsModel.onResults(results => { latestHands = results.multiHandLandmarks || []; });
 
     const faceModel = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
-    faceModel.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+    faceModel.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     faceModel.onResults(results => { latestFace = results.multiFaceLandmarks ? results.multiFaceLandmarks[0] : null; });
 
+    // Camera Setup 
     const camera = new Camera(video, {
         onFrame: async () => {
-            if(appState === "CLOWN" || appState === "GAME") {
+            if(appState === "CLOWN") {
                 await faceModel.send({image: video});
+            } else if (appState === "GAME") {
                 await handsModel.send({image: video});
             }
         },
-        width: 1280, height: 720,
+        width: 640, height: 480,
         facingMode: "user" 
     });
     camera.start();
 
     // Helper: Responsive Text Drawing
     function drawText(text, x, y, size, color, shadow=true, center=true) {
-        // Dynamically scale text based on phone screen width
         let s = Math.min(W / 400, 1.2); 
         let dynamicSize = Math.floor(size * s);
         
@@ -102,10 +103,29 @@
         ctx.fillText(text, x, y);
     }
 
+    // Helper: Draw Images without stretching (Like Instagram Stories)
+    function drawImageCover(context, img, x, y, w, h) {
+        let imgRatio = img.width / img.height;
+        let canvasRatio = w / h;
+        let sW, sH, sX, sY;
+        if (imgRatio > canvasRatio) {
+            sH = img.height;
+            sW = img.height * canvasRatio;
+            sX = (img.width - sW) / 2;
+            sY = 0;
+        } else {
+            sW = img.width;
+            sH = img.width / canvasRatio;
+            sX = 0;
+            sY = (img.height - sH) / 2;
+        }
+        context.drawImage(img, sX, sY, sW, sH, x, y, w, h);
+    }
+
     function takePhoto(filename) {
         const link = document.createElement('a');
         link.download = filename;
-        link.href = canvas.toDataURL('image/jpeg', 0.9);
+        link.href = canvas.toDataURL('image/jpeg', 0.8);
         link.click();
     }
 
@@ -168,29 +188,43 @@
             return;
         }
 
-        // --- RESPONSIVE CAMERA MATH (Object-Fit: Cover) ---
+        // --- NEW RESPONSIVE CAMERA CROPPING MATH ---
         let vW = video.videoWidth || 640;
         let vH = video.videoHeight || 480;
         let vRatio = vW / vH;
         let cRatio = W / H;
-
-        let drawW, drawH;
+        
+        let sW, sH, sX, sY;
         if (vRatio > cRatio) {
-            drawH = H; drawW = H * vRatio;
+            // Video is wider than canvas (Crop sides)
+            sH = vH;
+            sW = vH * cRatio;
+            sX = (vW - sW) / 2;
+            sY = 0;
         } else {
-            drawW = W; drawH = W / vRatio;
+            // Video is taller than canvas (Crop top/bottom)
+            sW = vW;
+            sH = vW / cRatio;
+            sX = 0;
+            sY = (vH - sH) / 2;
         }
 
-        // Draw Mirrored, Perfectly Scaled Camera
+        // Draw Mirrored Camera precisely filling the canvas
         ctx.save();
-        ctx.translate(W/2, H/2);
         ctx.scale(-1, 1);
-        ctx.drawImage(video, -drawW/2, -drawH/2, drawW, drawH);
+        ctx.drawImage(video, sX, sY, sW, sH, -W, 0, W, H);
         ctx.restore();
 
-        // Mapping function: Converts AI coordinates (0 to 1) to physical screen pixels
-        const mapX = (x) => (W/2) + (drawW/2) - (x * drawW);
-        const mapY = (y) => (H/2) - (drawH/2) + (y * drawH);
+        // The ultimate AI coordinate mapper! Translates AI data to match the cropped screen
+        const getCanvasPoint = (normX, normY) => {
+            let px = normX * vW;
+            let py = normY * vH;
+            let cx_src = px - sX;
+            let cy_src = py - sY;
+            let cx = cx_src * (W / sW);
+            let cy = cy_src * (H / sH);
+            return { x: W - cx, y: cy }; // Mirrored X!
+        };
 
         // White Flash
         if(flashCounter > 0) {
@@ -199,20 +233,21 @@
             requestAnimationFrame(renderLoop); return;
         }
 
-        // Animorphs Transition
+        // Animorphs Transition (No Stretching)
         if (isMorphing) {
             morphCounter++;
-            let fadeSpeed = 60.0;
-            let totalShowTime = 240; 
+            let fadeSpeed = 30.0;     
+            let totalShowTime = 120;  
             let alpha = Math.min(morphCounter / fadeSpeed, 1.0);
             
             if(morphCounter <= fadeSpeed) {
                 ctx.putImageData(frozenFrameData, 0, 0);
                 ctx.globalAlpha = alpha;
-                ctx.drawImage(targetMeme, 0, 0, W, H);
+                // Use the new algorithm to draw the meme without squashing it!
+                drawImageCover(ctx, targetMeme, 0, 0, W, H);
                 ctx.globalAlpha = 1.0;
             } else if (morphCounter <= totalShowTime) {
-                ctx.drawImage(targetMeme, 0, 0, W, H);
+                drawImageCover(ctx, targetMeme, 0, 0, W, H);
             } else {
                 isMorphing = false; morphCounter = 0; holdFrames = 0;
             }
@@ -222,27 +257,25 @@
         // --- CLOWN STAGE ---
         if (appState === "CLOWN") {
             if (latestFace && imgClown.complete) {
-                // Find face width to scale the clown correctly
-                let xs = latestFace.map(lm => mapX(lm.x));
-                let fw = Math.max(...xs) - Math.min(...xs);
+                // Find face width using the new mapper
+                let ptL = getCanvasPoint(latestFace[454].x, latestFace[454].y); 
+                let ptR = getCanvasPoint(latestFace[234].x, latestFace[234].y); 
+                let faceW = Math.abs(ptL.x - ptR.x);
                 
-                // Track Landmark 1 (The Tip of the Nose)
-                let noseX = mapX(latestFace[1].x);
-                let noseY = mapY(latestFace[1].y);
+                // Track Landmark 1 (The exact Tip of the Nose)
+                let nose = getCanvasPoint(latestFace[1].x, latestFace[1].y);
 
-                // Scale clown to match face width, keeping its aspect ratio
                 let clownAspect = imgClown.height / imgClown.width;
-                let ow = fw * 2.2; // Make wig wide enough to cover head
+                let ow = faceW * 2.5; 
                 let oh = ow * clownAspect;
                 
-                // Pin the center of the clown image EXACTLY to the nose!
-                let ox = noseX - (ow / 2);
-                let oy = noseY - (oh / 2);
+                // Pin the exact center of the clown image to the nose coordinates
+                let ox = nose.x - (ow / 2);
+                let oy = nose.y - (oh * 0.55); 
                 
                 ctx.drawImage(imgClown, ox, oy, ow, oh);
             }
 
-            // Responsive UI Panel
             ctx.fillStyle = "rgba(10, 8, 50, 0.7)";
             ctx.fillRect(0, H - (H * 0.25), W, H * 0.25);
             
@@ -258,7 +291,6 @@
         if (appState === "GAME") {
             let gesture = checkGestures();
 
-            // Responsive Game UI Overlays
             ctx.fillStyle = "rgba(10, 8, 50, 0.7)";
             ctx.fillRect(0, 0, W, H * 0.1);
             ctx.fillRect(0, H - (H * 0.22), W, H * 0.22);
