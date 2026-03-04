@@ -11,7 +11,7 @@
 
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Microsoft YaHei', sans-serif; touch-action: none; }
-        canvas { display: block; width: 100vw; height: 100vh; object-fit: cover; }
+        canvas { display: block; width: 100vw; height: 100vh; }
         #assets { display: none; }
     </style>
 </head>
@@ -33,19 +33,15 @@
     const ctx = canvas.getContext('2d');
     const bgm = document.getElementById('bgm');
     
-    // Images
     const imgClown = document.getElementById('clown');
     const imgPeace = document.getElementById('img_peace');
     const imgEars = document.getElementById('img_ears');
 
-    // Make canvas fill the phone screen
     let W = window.innerWidth;
     let H = window.innerHeight;
-    canvas.width = W;
-    canvas.height = H;
 
-    // --- GAME VARIABLES ---
-    let appState = "SPLASH"; // SPLASH, CLOWN, GAME, END
+    // Game Variables
+    let appState = "SPLASH"; 
     let currentStage = 1;
     let holdFrames = 0;
     const REQUIRED_HOLD = 20;
@@ -60,7 +56,6 @@
     let latestFace = null;
     let splashTime = 0;
 
-    // Setup Falling Stars for Splash
     let splashParticles = [];
     for(let i=0; i<70; i++) {
         splashParticles.push({
@@ -70,7 +65,7 @@
         });
     }
 
-    // --- AI SETUP (MediaPipe JS) ---
+    // AI Setup
     const handsModel = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
     handsModel.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
     handsModel.onResults(results => { latestHands = results.multiHandLandmarks || []; });
@@ -79,7 +74,6 @@
     faceModel.setOptions({ maxNumFaces: 1, refineLandmarks: false, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
     faceModel.onResults(results => { latestFace = results.multiFaceLandmarks ? results.multiFaceLandmarks[0] : null; });
 
-    // --- CAMERA SETUP ---
     const camera = new Camera(video, {
         onFrame: async () => {
             if(appState === "CLOWN" || appState === "GAME") {
@@ -88,13 +82,17 @@
             }
         },
         width: 1280, height: 720,
-        facingMode: "user" // Forces the front selfie camera on phones
+        facingMode: "user" 
     });
     camera.start();
 
-    // --- HELPERS ---
+    // Helper: Responsive Text Drawing
     function drawText(text, x, y, size, color, shadow=true, center=true) {
-        ctx.font = `bold ${size}px 'Microsoft YaHei', sans-serif`;
+        // Dynamically scale text based on phone screen width
+        let s = Math.min(W / 400, 1.2); 
+        let dynamicSize = Math.floor(size * s);
+        
+        ctx.font = `bold ${dynamicSize}px 'Microsoft YaHei', sans-serif`;
         if(center) { x = x - (ctx.measureText(text).width / 2); }
         if(shadow) {
             ctx.fillStyle = "rgba(0,0,0,0.7)";
@@ -113,25 +111,22 @@
 
     function checkGestures() {
         let gesture = "none";
-        
-        // Check Peace Sign
         for(let hand of latestHands) {
             if (hand[8].y < hand[6].y && hand[12].y < hand[10].y && hand[16].y > hand[14].y && hand[20].y > hand[18].y) {
                 gesture = "peace"; break;
             }
         }
-        // Check Ears
         if (latestHands.length === 2 && latestHands[0][8].y < 0.7 && latestHands[1][8].y < 0.7) {
             gesture = "ears";
         }
         return gesture;
     }
 
-    // --- INTERACTION ---
+    // Start Interaction
     canvas.addEventListener('click', () => {
         if(appState === "SPLASH") {
             appState = "CLOWN";
-            bgm.play().catch(e => console.log("Audio play prevented")); // Start music
+            bgm.play().catch(e => console.log("Audio play prevented"));
         } 
         else if (appState === "CLOWN") {
             takePhoto(`Clown_Memory_${Date.now()}.jpg`);
@@ -139,7 +134,6 @@
         }
     });
 
-    // --- MAIN RENDER LOOP ---
     function renderLoop() {
         W = window.innerWidth; H = window.innerHeight;
         canvas.width = W; canvas.height = H;
@@ -147,15 +141,12 @@
 
         if (appState === "SPLASH") {
             splashTime += 0.05;
-            
-            // Dynamic Background
             let r = Math.floor(40 + 15 * Math.sin(splashTime + Math.PI));
             let g = Math.floor(8 + 5 * Math.cos(splashTime));
             let b = Math.floor(15 + 10 * Math.sin(splashTime));
             ctx.fillStyle = `rgb(${r},${g},${b})`;
             ctx.fillRect(0, 0, W, H);
 
-            // Falling Blinking Stars
             splashParticles.forEach(p => {
                 p.y += p.vy;
                 if(p.y > H) { p.y = -10; p.x = Math.random() * W; }
@@ -165,83 +156,101 @@
                 ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
             });
 
-            drawText("义父生日快乐！", W/2, H*0.3, 40, "#00D7FF");
-            if(splashTime > 0.5) drawText("为你准备的特别小游戏", W/2, H*0.45, 24, "#00D7FF");
-            if(splashTime > 1.2) drawText("步骤1: 比一个 Peace 手势", W/2, H*0.6, 20, "#C8F0FF");
-            if(splashTime > 1.4) drawText("步骤2: 双手放耳边", W/2, H*0.68, 20, "#C8F0FF");
+            drawText("义父生日快乐！", W/2, H*0.3, 35, "#00D7FF");
+            if(splashTime > 0.5) drawText("为你准备的特别小游戏", W/2, H*0.45, 22, "#00D7FF");
+            if(splashTime > 1.2) drawText("步骤1: 比一个 Peace 手势", W/2, H*0.6, 18, "#C8F0FF");
+            if(splashTime > 1.4) drawText("步骤2: 双手放耳边", W/2, H*0.68, 18, "#C8F0FF");
             
             if(Math.floor(splashTime * 2) % 2 === 0) {
-                drawText("( 点击屏幕开始 )", W/2, H*0.85, 18, "#FFFF00");
+                drawText("( 点击屏幕开始 )", W/2, H*0.85, 16, "#FFFF00");
             }
             requestAnimationFrame(renderLoop);
             return;
         }
 
-        // Draw Mirrored Camera Feed
+        // --- RESPONSIVE CAMERA MATH (Object-Fit: Cover) ---
+        let vW = video.videoWidth || 640;
+        let vH = video.videoHeight || 480;
+        let vRatio = vW / vH;
+        let cRatio = W / H;
+
+        let drawW, drawH;
+        if (vRatio > cRatio) {
+            drawH = H; drawW = H * vRatio;
+        } else {
+            drawW = W; drawH = W / vRatio;
+        }
+
+        // Draw Mirrored, Perfectly Scaled Camera
         ctx.save();
+        ctx.translate(W/2, H/2);
         ctx.scale(-1, 1);
-        ctx.drawImage(video, -W, 0, W, H);
+        ctx.drawImage(video, -drawW/2, -drawH/2, drawW, drawH);
         ctx.restore();
 
-        // White Flash Effect
+        // Mapping function: Converts AI coordinates (0 to 1) to physical screen pixels
+        const mapX = (x) => (W/2) + (drawW/2) - (x * drawW);
+        const mapY = (y) => (H/2) - (drawH/2) + (y * drawH);
+
+        // White Flash
         if(flashCounter > 0) {
-            ctx.fillStyle = "white";
-            ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = "white"; ctx.fillRect(0, 0, W, H);
             flashCounter--;
-            requestAnimationFrame(renderLoop);
-            return;
+            requestAnimationFrame(renderLoop); return;
         }
 
         // Animorphs Transition
         if (isMorphing) {
             morphCounter++;
-            
-            // NEW TIMING: 60 frames = 1 second fade, 240 frames = 3 seconds hold time
             let fadeSpeed = 60.0;
             let totalShowTime = 240; 
-            
             let alpha = Math.min(morphCounter / fadeSpeed, 1.0);
             
             if(morphCounter <= fadeSpeed) {
-                // Phase 1: Smoothly dissolve from his face into the meme
                 ctx.putImageData(frozenFrameData, 0, 0);
                 ctx.globalAlpha = alpha;
                 ctx.drawImage(targetMeme, 0, 0, W, H);
                 ctx.globalAlpha = 1.0;
             } else if (morphCounter <= totalShowTime) {
-                // Phase 2: Hold the meme on screen so he can laugh
                 ctx.drawImage(targetMeme, 0, 0, W, H);
             } else {
-                // Phase 3: Done, move to the next stage
                 isMorphing = false; morphCounter = 0; holdFrames = 0;
             }
-            requestAnimationFrame(renderLoop);
-            return;
+            requestAnimationFrame(renderLoop); return;
         }
 
         // --- CLOWN STAGE ---
         if (appState === "CLOWN") {
-            if (latestFace) {
-                let xs = latestFace.map(lm => (1 - lm.x) * W); // Mirrored X
-                let ys = latestFace.map(lm => lm.y * H);
-                let fx = Math.min(...xs), fw = Math.max(...xs) - fx;
-                let fy = Math.min(...ys), fh = Math.max(...ys) - fy;
+            if (latestFace && imgClown.complete) {
+                // Find face width to scale the clown correctly
+                let xs = latestFace.map(lm => mapX(lm.x));
+                let fw = Math.max(...xs) - Math.min(...xs);
                 
-                let ow = fw * 1.5, oh = fh * 1.5;
-                let ox = fx - (ow - fw)/2, oy = fy - (oh - fh)/2 - fh*0.2;
+                // Track Landmark 1 (The Tip of the Nose)
+                let noseX = mapX(latestFace[1].x);
+                let noseY = mapY(latestFace[1].y);
+
+                // Scale clown to match face width, keeping its aspect ratio
+                let clownAspect = imgClown.height / imgClown.width;
+                let ow = fw * 2.2; // Make wig wide enough to cover head
+                let oh = ow * clownAspect;
                 
-                if(imgClown.complete) ctx.drawImage(imgClown, ox, oy, ow, oh);
+                // Pin the center of the clown image EXACTLY to the nose!
+                let ox = noseX - (ow / 2);
+                let oy = noseY - (oh / 2);
+                
+                ctx.drawImage(imgClown, ox, oy, ow, oh);
             }
 
-            // UI
+            // Responsive UI Panel
             ctx.fillStyle = "rgba(10, 8, 50, 0.7)";
-            ctx.fillRect(0, H - 150, W, 150);
+            ctx.fillRect(0, H - (H * 0.25), W, H * 0.25);
             
-            drawText("生日快乐！", W/2, H - 100, 28, "#00FFFF");
-            drawText("今天小丑没有来所以你自己当哈哈哈哈", W/2, H - 60, 20, "#00FFFF");
+            drawText("生日快乐！", W/2, H - (H * 0.18), 26, "#00FFFF");
+            drawText("今天小丑没有来所以你自己当哈哈哈哈", W/2, H - (H * 0.12), 18, "#00FFFF");
             
             if(Math.floor(Date.now() / 500) % 2 === 0) {
-                drawText("( 点击屏幕任意位置进入下一步 )", W/2, H - 20, 16, "#B4C8FF");
+                drawText("( 点击屏幕任意位置进入下一步 )", W/2, H - (H * 0.05), 14, "#B4C8FF");
             }
         }
 
@@ -249,15 +258,14 @@
         if (appState === "GAME") {
             let gesture = checkGestures();
 
-            // UI Overlays
+            // Responsive Game UI Overlays
             ctx.fillStyle = "rgba(10, 8, 50, 0.7)";
-            ctx.fillRect(0, 0, W, 80);
-            ctx.fillRect(0, H - 150, W, 150);
+            ctx.fillRect(0, 0, W, H * 0.1);
+            ctx.fillRect(0, H - (H * 0.22), W, H * 0.22);
             
             let barW = Math.min(W * 0.8, 600), barH = 20;
-            let barX = (W - barW) / 2, barY = H - 40;
+            let barX = (W - barW) / 2, barY = H - (H * 0.06);
             
-            // Progress Bar
             ctx.fillStyle = "#28283C"; ctx.fillRect(barX, barY, barW, barH);
             let progress = Math.min(holdFrames / REQUIRED_HOLD, 1.0);
             if(progress > 0) {
@@ -269,8 +277,8 @@
             ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.strokeRect(barX, barY, barW, barH);
 
             if (currentStage === 1) {
-                drawText("义父比个 Peace ！", W/2, H - 100, 30, "#00FFFF");
-                drawText("保持稳定... 举高一点！", W/2, H - 65, 20, "#B4C8FF");
+                drawText("义父比个 Peace ！", W/2, H - (H * 0.15), 26, "#00FFFF");
+                drawText("保持稳定... 举高一点！", W/2, H - (H * 0.10), 16, "#B4C8FF");
                 if (gesture === "peace") {
                     holdFrames++;
                     if(holdFrames >= REQUIRED_HOLD) {
@@ -281,8 +289,8 @@
                 } else { holdFrames = Math.max(0, holdFrames - 1); }
             }
             else if (currentStage === 2) {
-                drawText("最后一步：双手放到耳边！", W/2, H - 100, 28, "#FF00FF");
-                drawText("就像在阻挡噪音一样！", W/2, H - 65, 20, "#B4C8FF");
+                drawText("最后一步：双手放到耳边！", W/2, H - (H * 0.15), 26, "#FF00FF");
+                drawText("就像在阻挡噪音一样！", W/2, H - (H * 0.10), 16, "#B4C8FF");
                 if (gesture === "ears") {
                     holdFrames++;
                     if(holdFrames >= REQUIRED_HOLD) {
@@ -298,16 +306,14 @@
         if (appState === "END") {
             ctx.fillStyle = "rgba(0,0,0,0.6)";
             ctx.fillRect(0, 0, W, H);
-            drawText("义父生日快乐！！快点赚大钱养我！", W/2, H/2 - 30, 32, "#00FF00");
-            drawText("你的小丑照已经偷偷保存了哈哈哈哈", W/2, H/2 + 30, 20, "#FF6464");
+            drawText("义父生日快乐！！快点赚大钱养我！", W/2, H/2 - 30, 26, "#00FF00");
+            drawText("你的小丑照已经偷偷保存了哈哈哈哈", W/2, H/2 + 30, 16, "#FF6464");
         }
 
         requestAnimationFrame(renderLoop);
     }
 
-    // Start everything
     renderLoop();
 </script>
 </body>
-
 </html>
